@@ -38,7 +38,7 @@ def webhook():
             text = event.get('message', {}).get('text', '').strip()
             
             # ตรวจสอบคำสั่งให้ตรงกับที่ตั้งไว้ใน Cloudflare Worker
-            if message_type == 'text' and text in ['!disconnect', 'เก็บอุปกรณ์', '!งานยกเลิก', '!สรุปงาน']:
+            if message_type == 'text' and text in ['!disconnect','!งานยกเลิก']:
                 print(f"ได้รับคำสั่ง: {text} กำลังเริ่มทำงาน...")
                 
                 # ส่งข้อความแจ้งเตือนเบื้องต้นว่ากำลังดึงข้อมูล
