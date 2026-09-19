@@ -63,17 +63,18 @@ def webhook():
     global is_processing
     body = request.get_json()
     
+    if not body:
+        return 'OK', 200
+
     events = body.get('events', [])
     for event in events:
         if event.get('type') == 'message':
             message_type = event.get('message', {}).get('type')
             text = event.get('message', {}).get('text', '').strip()
             
-            # ตรวจสอบคำสั่ง
             if message_type == 'text' and text in ['disconnect', 'งานยกเลิก']:
                 reply_token = event.get('replyToken')
                 
-                # ตรวจสอบและล็อกสถานะป้องกันการรันซ้อน
                 with process_lock:
                     if is_processing:
                         print("ปฏิเสธคำสั่งซ้อน: บอทกำลังประมวลผลงานค้างอยู่...")
@@ -82,15 +83,12 @@ def webhook():
                     
                     is_processing = True
 
-                print(f"ได้รับคำสั่ง: {text} กำลังเริ่มทำงาน...")
+                print(f"ได้รับคำสั่ง: {text} กำลังเริ่มทำงานในเบื้องหลัง...")
                 
-                # 📌 หมายเหตุสำคัญ: 
-                # ห้ามเรียก reply_text ที่นี่เด็ดขาด! เพราะจะทำให้ replyToken ถูกใช้และหมดอายุก่อน 
-                # ที่ Playwright จะทำงานเสร็จ ให้เก็บ Token ไว้ส่งผลลัพธ์รวบยอดตอนท้ายทีเดียวครับ
-                
-                # รันงานทั้งหมดใน Background Thread
+                # รันงานใน Background Thread
                 threading.Thread(target=process_and_reply, args=(reply_token,)).start()
 
+    # ⭐ สำคัญมาก: ต้องรีบตอบกลับ 200 OK ทันที เพื่อไม่ให้ LINE ตัด Timeout
     return 'OK', 200
 
 if __name__ == "__main__":
