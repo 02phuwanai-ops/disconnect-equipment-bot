@@ -57,11 +57,11 @@ def download_report(download_folder="downloads"):
         # 1. เปิดหน้าเข้าสู่ระบบ
         print("กำลังเปิดหน้าเข้าสู่ระบบ...")
         try:
-            page.goto(LOGIN_URL, wait_until="commit", timeout=60000)
+            page.goto(LOGIN_URL, wait_until="commit", timeout=90000)
         except Exception as e:
             print(f"การเชื่อมต่อหน้าแรกช้า พยายามทำรายการต่อ... ({e})")
 
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(5000)
 
         # ค้นหา Frame ล็อกอิน
         target_page = page

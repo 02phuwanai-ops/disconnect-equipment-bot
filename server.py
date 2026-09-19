@@ -13,6 +13,10 @@ LINE_TOKEN = os.getenv("LINE_TOKEN")
 
 app = Flask(__name__)
 
+# --- เพิ่มตัวแปรสำหรับป้องกันการรันซ้อน (Lock State) ---
+is_processing = False
+process_lock = threading.Lock()
+
 # ฟังก์ชันส่งข้อความ Reply กลับไปหา LINE (ใช้สำหรับกรณีแจ้ง Error ฉุกเฉิน)
 def reply_text(reply_token, text):
     url = 'https://api.line.me/v2/bot/message/reply'
@@ -29,6 +33,7 @@ def reply_text(reply_token, text):
 
 # ฟังก์ชันรันงานเบื้องหลัง โดยส่ง reply_token ไปใช้ตอบกลับเมื่อเสร็จสิ้น
 def process_and_reply(reply_token):
+    global is_processing
     try:
         print("1. สั่งรันดาวน์โหลดรายงาน...")
         file_path = download_report()
@@ -47,9 +52,15 @@ def process_and_reply(reply_token):
             reply_text(reply_token, f"❌ เกิดข้อผิดพลาดในการประมวลผล: {str(e)}")
         except Exception as ex:
             print(f"ไม่สามารถส่งข้อความแจ้ง Error ได้: {ex}")
+    finally:
+        # ปลดล็อกสถานะเมื่อทำงานเสร็จสิ้น (ไม่ว่าจะสำเร็จหรือพัง)
+        with process_lock:
+            is_processing = False
+        print("สถานะบอท: พร้อมรับคำสั่งใหม่แล้ว")
 
 @app.route("/webhook", methods=['POST'])
 def webhook():
+    global is_processing
     body = request.get_json()
     
     events = body.get('events', [])
@@ -60,9 +71,18 @@ def webhook():
             
             # ตรวจสอบคำสั่ง
             if message_type == 'text' and text in ['disconnect', 'งานยกเลิก']:
-                print(f"ได้รับคำสั่ง: {text} กำลังเริ่มทำงาน...")
-                
                 reply_token = event.get('replyToken')
+                
+                # ตรวจสอบและล็อกสถานะป้องกันการรันซ้อน
+                with process_lock:
+                    if is_processing:
+                        print("ปฏิเสธคำสั่งซ้อน: บอทกำลังประมวลผลงานค้างอยู่...")
+                        reply_text(reply_token, "⏳ บอทกำลังประมวลผลรายการก่อนหน้าอยู่ กรุณารอสักครู่ครับ...")
+                        continue
+                    
+                    is_processing = True
+
+                print(f"ได้รับคำสั่ง: {text} กำลังเริ่มทำงาน...")
                 
                 # 📌 หมายเหตุสำคัญ: 
                 # ห้ามเรียก reply_text ที่นี่เด็ดขาด! เพราะจะทำให้ replyToken ถูกใช้และหมดอายุก่อน 
