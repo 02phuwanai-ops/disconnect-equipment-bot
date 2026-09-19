@@ -27,8 +27,8 @@ def process_and_reply():
     except Exception as e:
         print(f"เกิดข้อผิดพลาด: {e}")
 
-@app.route("/callback", methods=['POST'])
-def callback():
+@app.route("/webhook", methods=['POST'])  # <-- เปลี่ยนจาก /callback เป็น /webhook ให้ตรงกับ Cloudflare
+def webhook():
     body = request.get_json()
     
     events = body.get('events', [])
@@ -37,8 +37,8 @@ def callback():
             message_type = event.get('message', {}).get('type')
             text = event.get('message', {}).get('text', '').strip()
             
-            # ตรวจสอบคำสั่งที่พิมพ์เข้ามาใน LINE
-            if message_type == 'text' and text in ['!disconnect', '!งานยกเลิก', '!สรุปงาน']:
+            # ตรวจสอบคำสั่งให้ตรงกับที่ตั้งไว้ใน Cloudflare Worker
+            if message_type == 'text' and text in ['!disconnect', 'เก็บอุปกรณ์', '!งานยกเลิก', '!สรุปงาน']:
                 print(f"ได้รับคำสั่ง: {text} กำลังเริ่มทำงาน...")
                 
                 # ส่งข้อความแจ้งเตือนเบื้องต้นว่ากำลังดึงข้อมูล
