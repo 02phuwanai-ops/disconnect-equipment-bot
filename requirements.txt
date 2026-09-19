@@ -3,3 +3,5 @@ playwright
 requests
 python-dotenv
 gunicorn
+pandas
+openpyxl
