@@ -40,12 +40,13 @@ def download_report(download_folder="downloads"):
         ]
         
         try:
-            browser = p.chromium.launch(headless=False, channel="chrome", args=launch_args)
+            # บังคับใช้ headless=True สำหรับรันบน Server / Docker
+            browser = p.chromium.launch(headless=True, channel="chrome", args=launch_args)
         except Exception:
             try:
-                browser = p.chromium.launch(headless=False, channel="msedge", args=launch_args)
+                browser = p.chromium.launch(headless=True, channel="msedge", args=launch_args)
             except Exception:
-                browser = p.chromium.launch(headless=False, args=launch_args)
+                browser = p.chromium.launch(headless=True, args=launch_args)
 
         context = browser.new_context(accept_downloads=True, ignore_https_errors=True)
         page = context.new_page()
