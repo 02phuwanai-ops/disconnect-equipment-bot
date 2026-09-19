@@ -66,9 +66,12 @@ def download_report(download_folder="downloads"):
         # ค้นหา Frame ล็อกอิน
         target_page = page
         for frame in page.frames:
-            if frame.locator("input[type='password']").count() > 0:
-                target_page = frame
-                break
+            try:
+                if frame.locator("input[type='password']").count() > 0:
+                    target_page = frame
+                    break
+            except Exception:
+                continue
 
         print("กำลังกรอก Username และ Password...")
         inputs = target_page.locator("input[type='text'], input[type='password']")
@@ -93,14 +96,23 @@ def download_report(download_folder="downloads"):
         except Exception as e:
             print(f"กำลังโหลดหน้า Export... ({e})")
 
+        # รอให้หน้าเว็บและ Network โหลดนิ่งสนิทเพื่อป้องกัน Context ถูกทำลายระหว่างทาง
+        try:
+            page.wait_for_load_state("networkidle", timeout=30000)
+        except Exception:
+            pass
+
         page.wait_for_timeout(3000)
 
-        # 3. จัดการ Frame หน้า Export
+        # 3. จัดการ Frame หน้า Export (ใส่ try-catch ป้องกันเฟรมที่หลุดไปแล้ว)
         export_page = page
         for frame in page.frames:
-            if frame.locator("input[value='Export']").count() > 0 or frame.locator("#fromDate").count() > 0:
-                export_page = frame
-                break
+            try:
+                if frame.locator("input[value='Export']").count() > 0 or frame.locator("#fromDate").count() > 0:
+                    export_page = frame
+                    break
+            except Exception:
+                continue
 
         # 4. เลือก Due Date + ปรับวันที่ +7 วัน
         print("กำลังเลือก Date Type : Due Date และตั้งวันที่...")
