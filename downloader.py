@@ -1,4 +1,5 @@
 import os
+import asyncio  # <-- 1. เพิ่มเข้ามาเพื่อจัดการ Event Loop
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
@@ -12,6 +13,15 @@ LOGIN_URL = "https://gateway.truecorp.co.th/install/"
 EXPORT_URL = "https://gateway.truecorp.co.th/install/exportTextSOUnInstall.do?action=load"
 
 def download_report(download_folder="downloads"):
+    # --- 2. ป้องกันปัญหา Event Loop ชนกันเมื่อรันใน Thread ---
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.set_event_loop(asyncio.new_event_loop())
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+    # ----------------------------------------------------
+
     os.makedirs(download_folder, exist_ok=True)
     
     today = datetime.now()
@@ -29,7 +39,6 @@ def download_report(download_folder="downloads"):
             "--disable-setuid-sandbox"
         ]
         
-        # ลองใช้ Chrome ก่อน หากไม่มีค่อยถอยไปใช้ Chromium ปกติ
         try:
             browser = p.chromium.launch(headless=False, channel="chrome", args=launch_args)
         except Exception:
@@ -44,7 +53,7 @@ def download_report(download_folder="downloads"):
         page.set_default_navigation_timeout(60000)
         page.set_default_timeout(60000)
 
-        # 1. เปิดหน้าเข้าสู่ระบบ (เปลี่ยนการรอเป็น commit)
+        # 1. เปิดหน้าเข้าสู่ระบบ
         print("กำลังเปิดหน้าเข้าสู่ระบบ...")
         try:
             page.goto(LOGIN_URL, wait_until="commit", timeout=60000)
