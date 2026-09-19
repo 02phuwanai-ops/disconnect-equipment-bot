@@ -63,5 +63,4 @@ def reply_text(reply_token, text):
     requests.post(url, headers=headers, json=payload)
 
 if __name__ == "__main__":
-    # ติดตั้ง Flask ด้วยคำสั่ง: pip install flask
-    app.run(port=5000)
+    app.run(host="0.0.0.0", port=5000)
