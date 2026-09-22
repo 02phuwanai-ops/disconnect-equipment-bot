@@ -19,6 +19,10 @@ process_lock = threading.Lock()
 
 # ฟังก์ชันส่งข้อความ Reply กลับไปหา LINE (ใช้สำหรับกรณีแจ้ง Error ฉุกเฉิน)
 def reply_text(reply_token, text):
+    if not reply_token:
+        print(f"⚠️ ไม่สามารถส่งข้อความ Reply ได้เนื่องจากไม่มี reply_token (ข้อความที่จะส่ง: {text})")
+        return
+        
     url = 'https://api.line.me/v2/bot/message/reply'
     headers = {
         'Content-Type': 'application/json',

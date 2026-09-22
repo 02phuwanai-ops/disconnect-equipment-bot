@@ -17,14 +17,19 @@ def send_line_summary(data_list, reply_token=None):
         current_msg = f"📋 สรุปงาน Disconnect เก็บอุปกรณ์ ({len(data_list)} รายการ)\n=============================="
         
         for idx, item in enumerate(data_list, 1):
-            item_text = f"\n\n[{idx}] เขต: {item['khet']}"
-            item_text += f"\n🏢 ลูกค้า: {item['customer']}"
-            item_text += f"\n🏠 ที่อยู่: {item['address']}"
-            item_text += f"\n📞 โทร: {item['phone']}"
-            item_text += f"\n📝 เหตุผล: {item['reason']}"
+            order_id = item.get('order_id', 'N/A')
+            circuit = item.get('circuit', 'N/A')
+            customer = item.get('customer', 'N/A')
+            address = item.get('address', 'N/A')
+            reason = item.get('reason', 'N/A')
+
+            # จัดรูปแบบข้อความตามสไตล์ที่ต้องการ
+            item_text = f"\n\n🎫 : {order_id}"
+            item_text += f"\nCircuit: {circuit} {customer} {address}"
+            item_text += f"\n{reason}"
             item_text += "\n------------------------------"
 
-            # ตรวจสอบความยาว หากเกิน 4,000 ตัวอักษร ให้แยกขึ้นข้อความใหม่
+            # ตรวจสอบความยาว หากเกิน 4,000 ตัวอักษร ให้แยกข้อความใหม่
             if len(current_msg) + len(item_text) > 4000:
                 messages_to_send.append(current_msg)
                 current_msg = f"📋 สรุปงาน Disconnect (ต่อ)\n==============================" + item_text
@@ -35,7 +40,7 @@ def send_line_summary(data_list, reply_token=None):
 
     success = True
     
-    # บังคับใช้ Reply API เท่านั้น (ฟรี 100% ไม่ติดโควต้า 429)
+    # ส่งข้อความผ่าน Reply API (ฟรี ไม่เสียค่าใช้จ่าย)
     if reply_token:
         url = 'https://api.line.me/v2/bot/message/reply'
         headers = {
@@ -43,7 +48,6 @@ def send_line_summary(data_list, reply_token=None):
             'Authorization': f'Bearer {LINE_TOKEN}'
         }
         
-        # LINE Reply API ส่งได้สูงสุด 5 ข้อความต่อ 1 Request
         payload = {
             'replyToken': reply_token,
             'messages': [{'type': 'text', 'text': msg} for msg in messages_to_send[:5]]
@@ -57,7 +61,7 @@ def send_line_summary(data_list, reply_token=None):
         else:
             print("✅ ส่งข้อความสรุปเข้า LINE สำเร็จผ่าน Reply API!")
     else:
-        print("❌ ไม่พบ reply_token จึงไม่สามารถส่งข้อความแบบ Reply ได้ (ระวังอย่าใช้ Broadcast)")
+        print("❌ ไม่พบ reply_token จึงไม่สามารถส่งข้อความแบบ Reply ได้")
         success = False
 
     return success
