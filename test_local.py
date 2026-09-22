@@ -1,23 +1,29 @@
 import os
 import glob
 import pandas as pd
-import requests
 from dotenv import load_dotenv
 
-# โหลด Token จากไฟล์ .env
+# ============================================================
+# LOCAL TEST / PREVIEW ONLY
+# - คง Logic การอ่าน CSV และการกรองพื้นที่เดิม
+# - ไม่มีการยิง LINE API
+# - ไม่มี Push
+# - ใช้ตรวจสอบข้อความก่อนใช้งานจริงผ่าน LINE Webhook
+# ============================================================
+
 load_dotenv()
-LINE_TOKEN = os.getenv("LINE_TOKEN")
+
 
 def test_process_and_line():
-    # ค้นหาไฟล์ .csv ล่าสุดในโฟลเดอร์ downloads อัตโนมัติ
+    # 1. ค้นหาไฟล์ .csv ล่าสุดในโฟลเดอร์ downloads อัตโนมัติ
     list_of_files = glob.glob('downloads/*.csv')
     if not list_of_files:
         print("❌ ไม่พบไฟล์ CSV ในโฟลเดอร์ downloads")
         return
-    
+
     file_path = max(list_of_files, key=os.path.getctime)
     print(f"📂 กำลังอ่านไฟล์ล่าสุด: {file_path}")
-    
+
     try:
         # อ่านไฟล์ CSV จาก True Gateway
         df = pd.read_csv(file_path, encoding='cp874', low_memory=False)
@@ -27,7 +33,7 @@ def test_process_and_line():
 
     print(f"📊 จำนวนข้อมูลทั้งหมดในไฟล์: {len(df)} แถว")
 
-    # 2. กรองเฉพาะงานเก็บอุปกรณ์ (Function F) -> เช็กคอลัมน์ OIV_WORK_ACTN_CD
+    # 2. กรองเฉพาะงานเก็บอุปกรณ์ (Function F)
     if 'OIV_WORK_ACTN_CD' not in df.columns:
         print("❌ ไม่พบคอลัมน์ OIV_WORK_ACTN_CD ในไฟล์")
         return
@@ -35,63 +41,80 @@ def test_process_and_line():
     df_f = df[df['OIV_WORK_ACTN_CD'] == 'F'].copy()
     print(f"🔍 กรองงาน Function 'F' (เก็บอุปกรณ์) เหลือ: {len(df_f)} แถว")
 
-    # 3. กำหนดเงื่อนไขพื้นที่
-    cond_b025 = (df_f['HOP_HOZ_ORG'].str.contains('B025', na=False)) & (df_f['OIV_KHET'] == 'ห้วยขวาง')
-    cond_b044 = (df_f['HOP_HOZ_ORG'].str.contains('B044', na=False)) & (df_f['OIV_KHET'].isin(['ลาดพร้าว', 'วังทองหลาง']))
-    cond_b114 = (df_f['HOP_HOZ_ORG'].str.contains('B114', na=False)) & (df_f['OIV_KHET'].isin(['พระโขนง', 'คลองเตย', 'วัฒนา']))
+    # 3. กำหนดเงื่อนไขพื้นที่ - คง Logic เดิม
+    cond_b025 = (
+        (df_f['HOP_HOZ_ORG'].str.contains('B025', na=False))
+        & (df_f['OIV_KHET'] == 'ห้วยขวาง')
+    )
+    cond_b044 = (
+        (df_f['HOP_HOZ_ORG'].str.contains('B044', na=False))
+        & (df_f['OIV_KHET'].isin(['ลาดพร้าว', 'วังทองหลาง']))
+    )
+    cond_b114 = (
+        (df_f['HOP_HOZ_ORG'].str.contains('B114', na=False))
+        & (df_f['OIV_KHET'].isin(['พระโขนง', 'คลองเตย', 'วัฒนา']))
+    )
 
     filtered_df = df_f[cond_b025 | cond_b044 | cond_b114]
     print(f"🎯 กรองตามเงื่อนไขพื้นที่สำเร็จ เหลือ: {len(filtered_df)} รายการ")
 
-    # 4. จัดเตรียมข้อมูลที่จะส่ง
+    # 4. จัดเตรียมข้อมูล - คง Logic เดิม และเพิ่ม phone ให้ตรงกับ processor.py
     results = []
     for _, row in filtered_df.iterrows():
-        reason = row.get('UM_REASON') if pd.notna(row.get('UM_REASON')) else row.get('OIV_SR_DESC', '-')
+        reason = (
+            row.get('UM_REASON')
+            if pd.notna(row.get('UM_REASON'))
+            else row.get('OIV_SR_DESC', '-')
+        )
+
         results.append({
             'order_id': row.get('OIV_ORDERID', '-'),
             'circuit': row.get('OIV_SRV_NUM', '-'),
             'customer': row.get('OIV_CUSTOMER_NAME', '-'),
             'address': row.get('OIV_CUSTOMER_ADDRESS', '-'),
+            'phone': row.get('OIV_CONTACTNUMBER', '-'),
+            'building': row.get('SI_BUILDING', '-'),
+            'khet': row.get('OIV_KHET', '-'),
+            'khwang': row.get('OIV_KHWANG', '-'),
             'reason': reason
         })
 
-    # 5. ทดสอบส่งเข้า LINE
-    if not LINE_TOKEN:
-        print("❌ ไม่พบ LINE_TOKEN ในไฟล์ .env กรุณาตรวจสอบ")
-        return
+    # 5. Local Preview เท่านั้น
+    # ห้ามยิง Push / Reply เพราะ Local ไม่มี reply_token
+    print("\n" + "=" * 60)
+    print("📱 LOCAL PREVIEW — ไม่มีการส่งข้อความเข้า LINE")
+    print("=" * 60)
 
-    print("🚀 กำลังส่งข้อมูลสรุปเข้า LINE...")
-    
-    # สร้างข้อความสรุป
-    message_text = f"📋 สรุปงาน Disconnect เก็บอุปกรณ์ (ทดสอบ Local)\nพบทั้งหมด {len(results)} รายการ\n============================== "
-    
-    for item in results[:5]:  # ตัวอย่างส่ง 5 รายการแรกก่อน
-        message_text += f"\n\n🎫 : {item['order_id']}"
-        message_text += f"\nCircuit: {item['circuit']} {item['customer']}"
-        message_text += f"\n{item['reason']}"
-        message_text += "\n------------------------------"
-
-    line_to = os.getenv("LINE_TO")
-    
-    if not line_to:
-        print("⚠️ กรุณากำหนด LINE_TO (User ID หรือ Group ID ของคุณ) ใน .env เพื่อให้ระบบส่ง Push เข้าหาคุณได้โดยตรง")
-        return
-
-    url = 'https://api.line.me/v2/bot/message/push'
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {LINE_TOKEN}'
-    }
-    payload = {
-        'to': line_to,
-        'messages': [{'type': 'text', 'text': message_text}]
-    }
-
-    res = requests.post(url, headers=headers, json=payload)
-    if res.status_code == 200:
-        print("✅ ส่งข้อมูลเข้า LINE สำเร็จเรียบร้อยแล้ว!")
+    if not results:
+        message_text = (
+            "📋 สรุปงาน Disconnect เก็บอุปกรณ์ (+7 วันอนาคต)\n"
+            "❌ ไม่พบรายการในเขตที่กำหนด"
+        )
     else:
-        print(f"❌ ส่ง LINE ไม่สำเร็จ Status Code: {res.status_code}, Body: {res.text}")
+        message_parts = [
+            f"📋 สรุปงาน Disconnect เก็บอุปกรณ์ ({len(results)} รายการ)",
+            "=============================="
+        ]
+
+        for item in results[:5]:
+            message_parts.append(
+                f"\n🎫 : {item['order_id']}"
+                f"\nCircuit: {item['circuit']}"
+                f"\nลูกค้า: {item['customer']}"
+                f"\nสถานที่: {item['address']}"
+                f"\nโทร: {item['phone']}"
+                f"\n{item['reason']}"
+                f"\n------------------------------"
+            )
+
+        message_text = "\n".join(message_parts)
+
+    print(message_text)
+    print("=" * 60)
+    print("ℹ️ Local Test จบแล้ว — ไม่มี LINE API ถูกเรียกใช้")
+    print("ℹ️ การส่งจริงให้พิมพ์คำสั่งผ่าน LINE Webhook เท่านั้น")
+    print("=" * 60)
+
 
 if __name__ == "__main__":
     test_process_and_line()

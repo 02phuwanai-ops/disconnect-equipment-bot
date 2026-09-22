@@ -54,12 +54,27 @@ def download_report(download_folder="downloads"):
         page.set_default_navigation_timeout(120000)
         page.set_default_timeout(120000)
 
+        
         # 1. เปิดหน้าเข้าสู่ระบบ
         print("กำลังเปิดหน้าเข้าสู่ระบบ...")
+        print(f"กำลังทดสอบ URL: {LOGIN_URL}")
+
         try:
-            page.goto(LOGIN_URL, wait_until="commit", timeout=120000)
+            response = page.goto(
+                LOGIN_URL,
+                wait_until="commit",
+                timeout=30000
+            )
+
+            print(
+                f"Login HTTP Status: "
+                f"{response.status if response else 'ไม่มี Response'}"
+            )
+            print(f"Login URL ปัจจุบัน: {page.url}")
+
         except Exception as e:
-            print(f"การเชื่อมต่อหน้าแรกช้า พยายามทำรายการต่อ... ({e})")
+            print(f"Login เปิดไม่สำเร็จ: {type(e).__name__}: {e}")
+            print(f"URL ปัจจุบันหลังเกิดข้อผิดพลาด: {page.url}")
 
         page.wait_for_timeout(5000)
 
