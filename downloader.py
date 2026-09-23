@@ -41,7 +41,48 @@ def download_report(download_folder="downloads"):
         
         try:
             # บังคับใช้ headless=True สำหรับรันบน Server / Docker
-            browser = p.chromium.launch(headless=True, channel="chrome", args=launch_args)
+            print("กำลังเปิด Browser ด้วย Chrome...", flush=True)
+
+            try:
+                browser = p.chromium.launch(
+                    headless=True,
+                    channel="chrome",
+                    args=launch_args
+                )
+
+                print(
+                    f"✅ เปิด Chrome สำเร็จ | Version: {browser.version}",
+                    flush=True
+                )
+
+            except Exception as e:
+
+                print(
+                    f"⚠️ Chrome เปิดไม่ได้: {type(e).__name__}: {e}",
+                    flush=True
+                )
+
+                try:
+                    print("กำลังลอง Chromium ของ Playwright...", flush=True)
+
+                    browser = p.chromium.launch(
+                        headless=True,
+                        args=launch_args
+                    )
+
+                    print(
+                        f"✅ เปิด Chromium สำเร็จ | Version: {browser.version}",
+                        flush=True
+                    )
+
+                except Exception as e2:
+
+                    print(
+                        f"❌ Chromium เปิดไม่ได้: {type(e2).__name__}: {e2}",
+                        flush=True
+                    )
+
+                    raise
         except Exception:
             try:
                 browser = p.chromium.launch(headless=True, channel="msedge", args=launch_args)
@@ -55,26 +96,149 @@ def download_report(download_folder="downloads"):
         page.set_default_timeout(120000)
 
         
-        # 1. เปิดหน้าเข้าสู่ระบบ
-        print("กำลังเปิดหน้าเข้าสู่ระบบ...")
-        print(f"กำลังทดสอบ URL: {LOGIN_URL}")
+        # =========================================================
+        # 1. เปิดหน้าเข้าสู่ระบบ + Diagnostic
+        # =========================================================
+
+        print("=" * 70, flush=True)
+        print("STEP 1 : เปิดหน้าเข้าสู่ระบบ", flush=True)
+        print(f"LOGIN_URL = {LOGIN_URL}", flush=True)
+        print(f"Browser URL ก่อนเปิด = {page.url}", flush=True)
+
+        # ตรวจสอบ Browser ที่กำลังใช้งาน
+        try:
+            print(
+                f"Browser Version = {browser.version}",
+                flush=True
+            )
+        except Exception as e:
+            print(
+                f"ไม่สามารถอ่าน Browser Version ได้: {e}",
+                flush=True
+            )
+
+        print("กำลังเรียก page.goto()...", flush=True)
+
+        login_ok = False
 
         try:
+            start_time = datetime.now()
+
             response = page.goto(
                 LOGIN_URL,
                 wait_until="commit",
                 timeout=30000
             )
 
+            elapsed = (datetime.now() - start_time).total_seconds()
+
             print(
-                f"Login HTTP Status: "
-                f"{response.status if response else 'ไม่มี Response'}"
+                f"page.goto() จบการทำงาน ใช้เวลา {elapsed:.2f} วินาที",
+                flush=True
             )
-            print(f"Login URL ปัจจุบัน: {page.url}")
+
+            if response:
+                print(
+                    f"Login HTTP Status = {response.status}",
+                    flush=True
+                )
+                print(
+                    f"Login Response URL = {response.url}",
+                    flush=True
+                )
+            else:
+                print(
+                    "Login HTTP Status = ไม่มี Response",
+                    flush=True
+                )
+
+            print(
+                f"Browser URL หลัง goto = {page.url}",
+                flush=True
+            )
+
+            try:
+                print(
+                    f"Page Title = {page.title()}",
+                    flush=True
+                )
+            except Exception as e:
+                print(
+                    f"อ่าน Page Title ไม่ได้: {e}",
+                    flush=True
+                )
+
+            login_ok = True
 
         except Exception as e:
-            print(f"Login เปิดไม่สำเร็จ: {type(e).__name__}: {e}")
-            print(f"URL ปัจจุบันหลังเกิดข้อผิดพลาด: {page.url}")
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+
+            print("=" * 70, flush=True)
+            print("❌ LOGIN PAGE เปิดไม่สำเร็จ", flush=True)
+            print(
+                f"Error Type = {type(e).__name__}",
+                flush=True
+            )
+            print(
+                f"Error = {e}",
+                flush=True
+            )
+            print(
+                f"ใช้เวลา = {elapsed:.2f} วินาที",
+                flush=True
+            )
+            print(
+                f"URL ปัจจุบัน = {page.url}",
+                flush=True
+            )
+            print(
+                f"Frame จำนวน = {len(page.frames)}",
+                flush=True
+            )
+            print("=" * 70, flush=True)
+
+
+            # =========================================================
+            # ถ้า Login เปิดไม่ได้ → หยุดทันที
+            # =========================================================
+
+            if not login_ok:
+
+                print(
+                    "❌ ยกเลิกการทำงาน เนื่องจากเปิด True Gateway ไม่สำเร็จ",
+                    flush=True
+                )
+
+                try:
+                    browser.close()
+                except Exception:
+                    pass
+
+                raise RuntimeError(
+                    "ไม่สามารถเปิด True Gateway Login ได้ "
+                    f"(URL: {LOGIN_URL}, Browser URL: {page.url})"
+                )
+
+
+            # =========================================================
+            # Login เปิดสำเร็จ
+            # =========================================================
+
+            print("✅ Login Page เปิดสำเร็จ", flush=True)
+            print("กำลังรอหน้า Login โหลด...", flush=True)
+
+            page.wait_for_timeout(3000)
+
+            print(
+                f"URL หลังรอ = {page.url}",
+                flush=True
+            )
+
+            print(
+                f"จำนวน Frame = {len(page.frames)}",
+                flush=True
+            )
 
         page.wait_for_timeout(5000)
 
