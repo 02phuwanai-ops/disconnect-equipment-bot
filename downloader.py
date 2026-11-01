@@ -40,54 +40,25 @@ def download_report(download_folder="downloads"):
         ]
         
         try:
-            # บังคับใช้ headless=True สำหรับรันบน Server / Docker
-            print("กำลังเปิด Browser ด้วย Chrome...", flush=True)
+            # ใช้ Chromium ของ Playwright โดยตรงทันที เหมาะสำหรับ Docker / Server
+            print("กำลังเปิด Browser ด้วย Chromium...", flush=True)
 
-            try:
-                browser = p.chromium.launch(
-                    headless=True,
-                    channel="chrome",
-                    args=launch_args
-                )
+            browser = p.chromium.launch(
+                headless=True,
+                args=launch_args
+            )
 
-                print(
-                    f"✅ เปิด Chrome สำเร็จ | Version: {browser.version}",
-                    flush=True
-                )
+            print(
+                f"✅ เปิด Chromium สำเร็จ | Version: {browser.version}",
+                flush=True
+            )
 
-            except Exception as e:
-
-                print(
-                    f"⚠️ Chrome เปิดไม่ได้: {type(e).__name__}: {e}",
-                    flush=True
-                )
-
-                try:
-                    print("กำลังลอง Chromium ของ Playwright...", flush=True)
-
-                    browser = p.chromium.launch(
-                        headless=True,
-                        args=launch_args
-                    )
-
-                    print(
-                        f"✅ เปิด Chromium สำเร็จ | Version: {browser.version}",
-                        flush=True
-                    )
-
-                except Exception as e2:
-
-                    print(
-                        f"❌ Chromium เปิดไม่ได้: {type(e2).__name__}: {e2}",
-                        flush=True
-                    )
-
-                    raise
-        except Exception:
-            try:
-                browser = p.chromium.launch(headless=True, channel="msedge", args=launch_args)
-            except Exception:
-                browser = p.chromium.launch(headless=True, args=launch_args)
+        except Exception as e:
+            print(
+                f"❌ เปิด Chromium ไม่สำเร็จ: {type(e).__name__}: {e}",
+                flush=True
+            )
+            raise
 
         context = browser.new_context(accept_downloads=True, ignore_https_errors=True)
         page = context.new_page()
