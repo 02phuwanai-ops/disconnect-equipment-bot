@@ -1,171 +1,280 @@
 import os
-import threading
-from flask import Flask, request
-import requests
-from dotenv import load_dotenv
-
+import glob
+from flask import Flask, render_template_string, jsonify, send_from_directory
 from downloader import download_report
 from processor import process_disconnect_data
-from line_notifier import send_line_summary
-
-load_dotenv()
-LINE_TOKEN = os.getenv("LINE_TOKEN")
 
 app = Flask(__name__)
 
-# --- ป้องกันการรันซ้อน (Logic เดิม) ---
-is_processing = False
-process_lock = threading.Lock()
+# กำหนดโฟลเดอร์สำหรับดาวน์โหลดไฟล์
+DOWNLOAD_FOLDER = "downloads"
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
 
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>Disconnect Equipment Bot - Dashboard Pro</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --success-hover: #059669;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --border: #334155;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+        }
+        .container {
+            max-width: 850px;
+            margin: 30px auto;
+            background: var(--card-bg);
+            padding: 35px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+        }
+        h2 {
+            color: #f1f5f9;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        p {
+            color: var(--text-muted);
+        }
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        button {
+            border: none;
+            padding: 12px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary { background-color: var(--success); color: white; }
+        .btn-primary:hover { background-color: var(--success-hover); }
+        .btn-secondary { background-color: var(--primary); color: white; }
+        .btn-secondary:hover { background-color: var(--primary-hover); }
+        .btn-danger { background-color: #64748b; color: white; }
+        .btn-danger:hover { background-color: #475569; }
+        button:disabled { background-color: #475569; opacity: 0.6; cursor: not-allowed; }
+        
+        .loading {
+            display: none;
+            color: #f59e0b;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+        .status-box {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: 600;
+            display: none;
+            border: 1px solid transparent;
+        }
+        .status-success { background-color: rgba(16, 185, 129, 0.1); color: #34d399; border-color: rgba(16, 185, 129, 0.2); }
+        .status-error { background-color: rgba(239, 68, 68, 0.1); color: #f87171; border-color: rgba(239, 68, 68, 0.2); }
 
-def reply_text(reply_token, text):
-    """
-    Reply ฉุกเฉินกลับไปยัง LINE
-    ใช้ Reply API เท่านั้น
-    """
-    if not reply_token:
-        print(
-            f"⚠️ ไม่สามารถส่งข้อความ Reply ได้เนื่องจากไม่มี "
-            f"reply_token (ข้อความ: {text})"
-        )
-        return False
+        .textarea-container {
+            position: relative;
+            margin-top: 25px;
+        }
+        label {
+            font-weight: 600;
+            color: #e2e8f0;
+            display: block;
+            margin-bottom: 8px;
+        }
+        textarea {
+            width: 100%;
+            height: 320px;
+            padding: 15px;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-sizing: border-box;
+            background: #0f172a;
+            color: #f87171;
+            resize: vertical;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🛠️ Disconnect Equipment Bot <span style="font-size: 14px; background: #334155; padding: 4px 10px; border-radius: 20px; color: #38bdf8;">Dashboard Pro</span></h2>
+        <p>ระบบดึงรายงานอัตโนมัติ กรองเฉพาะงานเก็บอุปกรณ์ (Disconnect) และเตรียมข้อความสำหรับนำไปวางใน LINE</p>
+        
+        <div class="btn-group">
+            <button id="runBtn" class="btn-primary" onclick="runBot()">🚀 สั่งดาวน์โหลดและประมวลผล</button>
+            <button id="clearBtn" class="btn-danger" onclick="clearText()">🧹 ล้างข้อความ</button>
+            <a id="downloadCsvBtn" style="display:none;" class="btn-secondary" href="#" target="_blank">📥 ดาวน์โหลดไฟล์ CSV ดิบ</a>
+        </div>
+        
+        <div id="loading" class="loading">⏳ กำลังเปิดเบราว์เซอร์ดาวน์โหลดรายงานจาก True Gateway และคัดกรองข้อมูล... กรุณารอสักครู่ (10-30 วินาที)</div>
+        <div id="statusBox" class="status-box"></div>
 
-    if not LINE_TOKEN:
-        print("❌ ไม่พบ LINE_TOKEN ในไฟล์ .env")
-        return False
+        <div class="textarea-container">
+            <label for="resultText">📋 ข้อความสรุปสำหรับนำไปวางใน LINE:</label>
+            <textarea id="resultText" placeholder="ผลลัพธ์จะแสดงที่นี่หลังจากประมวลผลเสร็จ..."></textarea>
+        </div>
+        
+        <div class="btn-group" style="margin-top: 15px;">
+            <button class="btn-secondary" onclick="copyText()">📋 คัดลอกข้อความทั้งหมด</button>
+        </div>
+    </div>
 
-    url = "https://api.line.me/v2/bot/message/reply"
+    <script>
+        async function runBot() {
+            const btn = document.getElementById('runBtn');
+            const loading = document.getElementById('loading');
+            const statusBox = document.getElementById('statusBox');
+            const resultText = document.getElementById('resultText');
+            const downloadCsvBtn = document.getElementById('downloadCsvBtn');
 
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_TOKEN}"
-    }
+            btn.disabled = true;
+            loading.style.display = 'block';
+            statusBox.style.display = 'none';
+            resultText.value = '';
+            downloadCsvBtn.style.display = 'none';
 
-    payload = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": text}]
-    }
+            try {
+                let response = await fetch('/run-process', { method: 'POST' });
+                let data = await response.json();
 
+                if (data.status === 'success') {
+                    resultText.value = data.message;
+                    statusBox.className = 'status-box status-success';
+                    statusBox.innerText = `✅ สำเร็จ! ดึงข้อมูลและคัดกรองเรียบร้อย พบทั้งหมด ${data.count} รายการ`;
+                    statusBox.style.display = 'block';
+                    
+                    if (data.filename) {
+                        downloadCsvBtn.href = `/download-csv/${data.filename}`;
+                        downloadCsvBtn.style.display = 'inline-flex';
+                    }
+                } else {
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerText = `❌ เกิดข้อผิดพลาด: ${data.message}`;
+                    statusBox.style.display = 'block';
+                }
+            } catch (err) {
+                statusBox.className = 'status-box status-error';
+                statusBox.innerText = `❌ เชื่อมต่อ Server ไม่สำเร็จ: ${err}`;
+                statusBox.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+
+        function copyText() {
+            const textZone = document.getElementById('resultText');
+            if (!textZone.value.trim()) {
+                alert('⚠️ ไม่มีข้อความให้คัดกรอง!');
+                return;
+            }
+            textZone.select();
+            document.execCommand('copy');
+            alert('📋 คัดลอกข้อความเรียบร้อยแล้ว! สามารถนำไปวางใน LINE ได้เลยครับ');
+        }
+
+        function clearText() {
+            document.getElementById('resultText.value') = '';
+            document.getElementById('resultText').value = '';
+            document.getElementById('statusBox').style.display = 'none';
+            document.getElementById('downloadCsvBtn').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
+"""
+
+@app.route("/")
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route("/run-process", methods=["POST"])
+def run_process():
+    file_path = None
     try:
-        response = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-        print(
-            f"Reply Response Status: {response.status_code}, "
-            f"Body: {response.text}"
-        )
-        return response.status_code == 200
-    except requests.RequestException as e:
-        print(f"❌ ไม่สามารถเชื่อมต่อ LINE Reply API: {e}")
-        return False
-
-
-def process_and_reply(reply_token):
-    """
-    รันงานเดิมเบื้องหลัง:
-    ดาวน์โหลด -> กรอง -> Reply
-
-    ไม่เปลี่ยน Logic ของ downloader / processor
-    """
-    global is_processing
-
-    try:
-        print("1. สั่งรันดาวน์โหลดรายงาน...")
+        # 1. สั่งดาวน์โหลดไฟล์จาก True Gateway
         file_path = download_report()
-        print(f"ดาวน์โหลดสำเร็จ: {file_path}")
+        
+        if not file_path or not os.path.exists(file_path):
+            return jsonify({"status": "error", "message": "ไม่พบไฟล์ที่ดาวน์โหลดจาก True Gateway"})
 
-        print("2. กรองข้อมูล...")
+        filename = os.path.basename(file_path)
+
+        # 2. ประมวลผลและคัดกรองข้อมูลผ่าน processor.py
         data_list = process_disconnect_data(file_path)
-        print(f"คัดกรองเรียบร้อย พบ {len(data_list)} รายการ")
 
-        print("3. ส่งสรุปเข้า LINE (Reply)...")
-        success = send_line_summary(
-            data_list,
-            reply_token=reply_token
-        )
+        # 3. จัดรูปแบบข้อความ (ใช้ไอคอน 🔌 ตามที่คุณต้องการ)
+        if not data_list:
+            message_text = (
+                "📋 สรุปงาน Disconnect เก็บอุปกรณ์ (+7 วันอนาคต)\n"
+                "❌ ไม่พบรายการในเขตที่กำหนด"
+            )
+        else:
+            message_parts = [
+                f"📋 สรุปงาน Disconnect เก็บอุปกรณ์ ({len(data_list)} รายการ)",
+                "=============================="
+            ]
 
-        if not success:
-            print("❌ ส่งสรุปเข้า LINE ไม่สำเร็จ")
+            for item in data_list:
+                message_parts.append(
+                    f"\n🔌 : {item['order_id']}"
+                    f"\nCircuit: {item['circuit']}"
+                    f"\nลูกค้า: {item['customer']}"
+                    f"\nสถานที่: {item['address']}"
+                    f"\nโทร: {item['phone']}"
+                    f"\n{item['reason']}"
+                    f"\n------------------------------"
+                )
+
+            message_text = "\n".join(message_parts)
+
+        return jsonify({
+            "status": "success",
+            "count": len(data_list),
+            "message": message_text,
+            "filename": filename
+        })
 
     except Exception as e:
-        print(f"เกิดข้อผิดพลาดระหว่างประมวลผล: {e}")
+        return jsonify({"status": "error", "message": str(e)})
 
-        # พยายาม Reply แจ้ง Error โดยใช้ token เดิม
-        try:
-            reply_text(
-                reply_token,
-                f"❌ เกิดข้อผิดพลาดในการประมวลผล: {str(e)}"
-            )
-        except Exception as ex:
-            print(f"ไม่สามารถส่งข้อความแจ้ง Error ได้: {ex}")
-
-    finally:
-        with process_lock:
-            is_processing = False
-
-        print("สถานะบอท: พร้อมรับคำสั่งใหม่แล้ว")
-
-
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    global is_processing
-
-    try:
-        body = request.get_json(silent=True)
-    except Exception:
-        body = None
-
-    if not body:
-        return "OK", 200
-
-    events = body.get("events", [])
-
-    for event in events:
-        if event.get("type") != "message":
-            continue
-
-        message_type = event.get("message", {}).get("type")
-        text = event.get("message", {}).get("text", "").strip()
-
-        if message_type == "text" and text in ["disconnect", "งานยกเลิก"]:
-            reply_token = event.get("replyToken")
-
-            if not reply_token:
-                print("❌ LINE event ไม่มี replyToken")
-                continue
-
-            with process_lock:
-                if is_processing:
-                    print("ปฏิเสธคำสั่งซ้อน: บอทกำลังประมวลผลงานค้างอยู่...")
-
-                    # คง Logic เดิมสำหรับแจ้งผู้ใช้เมื่อมีงานซ้อน
-                    reply_text(
-                        reply_token,
-                        "⏳ บอทกำลังประมวลผลรายการก่อนหน้าอยู่ "
-                        "กรุณารอสักครู่ครับ..."
-                    )
-                    continue
-
-                is_processing = True
-
-            print(
-                f"ได้รับคำสั่ง: {text} "
-                "กำลังเริ่มทำงานในเบื้องหลัง..."
-            )
-
-            # คงแนวทาง Background Thread เดิม
-            threading.Thread(
-                target=process_and_reply,
-                args=(reply_token,),
-                daemon=True
-            ).start()
-
-    # ต้องตอบ Webhook 200 OK ให้ LINE
-    return "OK", 200
-
+@app.route("/download-csv/<filename>")
+def download_csv(filename):
+    return send_from_directory(DOWNLOAD_FOLDER, filename, as_attachment=True)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

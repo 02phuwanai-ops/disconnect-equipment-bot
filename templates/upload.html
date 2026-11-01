@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disconnect Equipment Bot - Manual CSV</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:Arial,Tahoma,sans-serif;background:#f3f6fa;display:flex;align-items:center;justify-content:center;padding:20px}.container{width:100%;max-width:760px}.card{background:#fff;border-radius:18px;padding:28px;box-shadow:0 8px 30px rgba(0,0,0,.08)}.title{text-align:center;margin-bottom:6px;font-size:26px;font-weight:700;color:#172033}.subtitle{text-align:center;color:#667085;margin-bottom:24px;font-size:15px}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px}.step{background:#f8fafc;border-radius:12px;padding:12px 8px;text-align:center;color:#475467;font-size:13px;line-height:1.5}.step-number{font-weight:700;font-size:18px;color:#172033}.upload-box{border:2px dashed #b8c2d1;border-radius:14px;padding:30px 20px;text-align:center;background:#fafbfd;margin-bottom:16px;transition:.2s}.upload-box.dragover{border-color:#06c755;background:#f1fff6}.upload-icon{font-size:46px;margin-bottom:10px}.file-input{width:100%;margin-top:16px}.file-name{margin-top:12px;color:#475467;font-size:14px;word-break:break-all}button{width:100%;border:0;border-radius:12px;padding:16px;font-size:17px;font-weight:700;cursor:pointer;background:#06c755;color:#fff}button:hover{opacity:.92}button:disabled{background:#aab2bd;cursor:not-allowed}.status{margin-top:18px;padding:14px;border-radius:10px;display:none;white-space:pre-line;font-size:14px;line-height:1.6}.info{background:#eef5ff;color:#24508f}.success{background:#ecfdf3;color:#087443}.error{background:#fff1f1;color:#b42318}.summary{display:none;margin-top:20px}.summary-title{font-size:18px;font-weight:700;color:#172033;margin-bottom:12px}.item{border:1px solid #e4e7ec;border-radius:12px;padding:15px;margin-bottom:12px;background:#fff}.item-row{margin-bottom:5px;line-height:1.5;word-break:break-word}.item-label{font-weight:700;color:#344054}.rules{margin-top:22px;padding:15px;border-radius:12px;background:#f8fafc;color:#475467;font-size:13px;line-height:1.7}.rules strong{color:#172033}.line-step{margin-top:16px;padding:14px;border-radius:12px;background:#fff8e6;color:#7a4b00;font-size:14px;line-height:1.6}.warning{margin-top:12px;font-size:12px;color:#667085;text-align:center}@media(max-width:600px){.card{padding:20px}.steps{grid-template-columns:1fr}.title{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="container"><div class="card">
+<div class="title">Disconnect Equipment Bot</div>
+<div class="subtitle">Manual CSV → กรองข้อมูล → ส่งสรุปเข้า LINE</div>
+<div class="steps">
+<div class="step"><div class="step-number">1</div>ดาวน์โหลด CSV จาก True Gateway</div>
+<div class="step"><div class="step-number">2</div>เลือกไฟล์ CSV และประมวลผล</div>
+<div class="step"><div class="step-number">3</div>พิมพ์ “งานยกเลิก” ใน LINE</div>
+</div>
+<form id="uploadForm">
+<div class="upload-box" id="uploadBox">
+<div class="upload-icon">📄</div>
+<div><strong>เลือกไฟล์ CSV</strong></div>
+<div>หรือ ลากไฟล์มาวางตรงนี้</div>
+<input class="file-input" type="file" id="csvFile" name="file" accept=".csv" required>
+<div id="fileName" class="file-name">ยังไม่ได้เลือกไฟล์</div>
+</div>
+<button id="submitBtn" type="submit">ประมวลผล CSV</button>
+</form>
+<div id="status" class="status"></div>
+<div id="summary" class="summary"><div class="summary-title">รายการที่พบ</div><div id="summaryList"></div></div>
+<div class="line-step"><strong>หลังประมวลผลเสร็จ:</strong><br>กลับไปที่ LINE แล้วพิมพ์ <strong>งานยกเลิก</strong> หรือ <strong>disconnect</strong> เพื่อให้ Bot ส่งสรุปจากไฟล์ล่าสุดกลับเข้า LINE</div>
+<div class="rules"><strong>เงื่อนไขการกรองเดิม</strong><br>• OIV_WORK_ACTN_CD = F<br>• B025 → ห้วยขวาง<br>• B044 → ลาดพร้าว / วังทองหลาง<br>• B114 → พระโขนง / คลองเตย / วัฒนา<br>• ข้อมูลสรุป: Ticket / Circuit / Customer / Address / Phone / Reason</div>
+<div class="warning">ระบบเก็บเฉพาะผลประมวลผลล่าสุดในหน่วยความจำของ instance และลบไฟล์ CSV หลังประมวลผล</div>
+</div></div>
+<script>
+const fileInput=document.getElementById('csvFile');const fileName=document.getElementById('fileName');const form=document.getElementById('uploadForm');const submitBtn=document.getElementById('submitBtn');const statusBox=document.getElementById('status');const summary=document.getElementById('summary');const summaryList=document.getElementById('summaryList');const uploadBox=document.getElementById('uploadBox');
+fileInput.addEventListener('change',function(){fileName.textContent=this.files.length?'ไฟล์ที่เลือก: '+this.files[0].name:'ยังไม่ได้เลือกไฟล์'});
+['dragenter','dragover'].forEach(n=>uploadBox.addEventListener(n,e=>{e.preventDefault();uploadBox.classList.add('dragover')}));['dragleave','drop'].forEach(n=>uploadBox.addEventListener(n,e=>{e.preventDefault();uploadBox.classList.remove('dragover')}));
+uploadBox.addEventListener('drop',e=>{const files=e.dataTransfer.files;if(files.length){fileInput.files=files;fileName.textContent='ไฟล์ที่เลือก: '+files[0].name}});
+form.addEventListener('submit',async e=>{e.preventDefault();if(!fileInput.files.length){showStatus('กรุณาเลือกไฟล์ CSV ก่อนครับ','error');return}const f=fileInput.files[0];if(!f.name.toLowerCase().endsWith('.csv')){showStatus('รองรับเฉพาะไฟล์ .csv เท่านั้นครับ','error');return}const fd=new FormData();fd.append('file',f);submitBtn.disabled=true;submitBtn.textContent='กำลังประมวลผล...';summary.style.display='none';summaryList.innerHTML='';showStatus('กำลังอ่าน CSV และใช้เงื่อนไขกรองเดิม...\nกรุณารอสักครู่','info');try{const r=await fetch('/upload',{method:'POST',body:fd});const result=await r.json();if(r.ok&&result.success){showStatus(result.message,'success');renderItems(result.items||[])}else{showStatus(result.message||'เกิดข้อผิดพลาด','error')}}catch(err){showStatus('❌ ไม่สามารถเชื่อมต่อกับ Bot ได้\n'+err,'error')}finally{submitBtn.disabled=false;submitBtn.textContent='ประมวลผล CSV'}});
+function showStatus(message,type){statusBox.style.display='block';statusBox.className='status '+type;statusBox.textContent=message}
+function renderItems(items){summaryList.innerHTML='';if(!items.length){return}items.forEach((item,index)=>{const div=document.createElement('div');div.className='item';div.innerHTML=`<div class="item-row"><span class="item-label">#${index+1}</span></div><div class="item-row"><span class="item-label">Ticket:</span> ${escapeHtml(item.order_id)}</div><div class="item-row"><span class="item-label">Circuit:</span> ${escapeHtml(item.circuit)}</div><div class="item-row"><span class="item-label">Customer:</span> ${escapeHtml(item.customer)}</div><div class="item-row"><span class="item-label">Address:</span> ${escapeHtml(item.address)}</div><div class="item-row"><span class="item-label">Phone:</span> ${escapeHtml(item.phone)}</div><div class="item-row"><span class="item-label">Reason:</span> ${escapeHtml(item.reason)}</div>`;summaryList.appendChild(div)});summary.style.display='block'}
+function escapeHtml(v){if(v===null||v===undefined)return '';return String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;')}
+</script>
+</body>
+</html>

@@ -15,7 +15,12 @@ def process_disconnect_data(file_path):
 
     df_f = df[df['OIV_WORK_ACTN_CD'] == 'F'].copy()
 
-    # 2. กำหนดเงื่อนไขพื้นที่ (ตามที่คุณตั้งค่าไว้)
+    # 2. เพิ่มเงื่อนไขคัดกรองเฉพาะคำว่า 'Disconnect' ใน OIV_SR_DESC (ตัดงาน Change ออก)
+    if 'OIV_SR_DESC' in df_f.columns:
+        # เลือกเฉพาะแถวที่ OIV_SR_DESC มีคำว่า Disconnect (ไม่สนใจตัวพิมพ์เล็กพิมพ์ใหญ่)
+        df_f = df_f[df_f['OIV_SR_DESC'].str.contains('Disconnect', case=False, na=False)]
+
+    # 3. กำหนดเงื่อนไขพื้นที่ (ตามที่คุณตั้งค่าไว้)
     cond_b025 = (df_f['HOP_HOZ_ORG'].str.contains('B025', na=False)) & (df_f['OIV_KHET'] == 'ห้วยขวาง')
     cond_b044 = (df_f['HOP_HOZ_ORG'].str.contains('B044', na=False)) & (df_f['OIV_KHET'].isin(['ลาดพร้าว', 'วังทองหลาง']))
     cond_b114 = (df_f['HOP_HOZ_ORG'].str.contains('B114', na=False)) & (df_f['OIV_KHET'].isin(['พระโขนง', 'คลองเตย', 'วัฒนา']))
@@ -29,7 +34,7 @@ def process_disconnect_data(file_path):
         
         results.append({
             'order_id': row.get('OIV_ORDERID', '-'),
-            'circuit': row.get('OIV_SRV_NUM', '-'), # ใช้ OIV_SRV_NUM ตามหัวข้อจริงในไฟล์
+            'circuit': row.get('OIV_SRV_NUM', '-'),
             'customer': row.get('OIV_CUSTOMER_NAME', '-'),
             'address': row.get('OIV_CUSTOMER_ADDRESS', '-'),
             'phone': row.get('OIV_CONTACTNUMBER', '-'),
