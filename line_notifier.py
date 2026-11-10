@@ -10,18 +10,18 @@ LINE_TOKEN = os.getenv("LINE_TOKEN")
 def _build_messages(data_list):
     """
     สร้างข้อความ LINE จากข้อมูลที่ processor.py ส่งมา
-    คง Logic เดิมของการสรุปงานไว้ และเพิ่มเบอร์โทรที่มีอยู่ในข้อมูล
+    ปรับรูปแบบให้สะอาดตา ไม่รกไอคอน และจัดหน้าให้อ่านง่าย
     """
     if not data_list:
         messages_to_send = [
-            "📋 สรุปงาน Disconnect เก็บอุปกรณ์ (+7 วันอนาคต)\n"
+            "📋 สรุปงาน Disconnect เก็บอุปกรณ์\n"
             "❌ ไม่พบรายการในเขตที่กำหนด"
         ]
     else:
         messages_to_send = []
         current_msg = (
             f"📋 สรุปงาน Disconnect เก็บอุปกรณ์ ({len(data_list)} รายการ)\n"
-            "=============================="
+            "━━━━━━━━━━━━━━━━━━━"
         )
 
         for idx, item in enumerate(data_list, 1):
@@ -32,20 +32,20 @@ def _build_messages(data_list):
             phone = item.get('phone', 'N/A')
             reason = item.get('reason', 'N/A')
 
-            item_text = f"\n\n🎫 : {order_id}"
+            item_text = f"\n\nOrder ID: {order_id}"
             item_text += f"\nCircuit: {circuit}"
             item_text += f"\nลูกค้า: {customer}"
             item_text += f"\nสถานที่: {address}"
             item_text += f"\nโทร: {phone}"
-            item_text += f"\n{reason}"
-            item_text += "\n------------------------------"
+            item_text += f"\nรายละเอียด: {reason}"
+            item_text += "\n━━━━━━━━━━━━━━━━━━━"
 
             # LINE text message จำกัดความยาวต่อข้อความ
             if len(current_msg) + len(item_text) > 4000:
                 messages_to_send.append(current_msg)
                 current_msg = (
                     "📋 สรุปงาน Disconnect (ต่อ)\n"
-                    "=============================="
+                    "━━━━━━━━━━━━━━━━━━━"
                     + item_text
                 )
             else:
