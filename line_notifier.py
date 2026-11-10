@@ -30,10 +30,12 @@ def _build_messages(data_list):
             customer = item.get('customer', 'N/A')
             address = item.get('address', 'N/A')
             phone = item.get('phone', 'N/A')
+            due_date = item.get('due_date', 'N/A')  # ⬅️ ดึงค่า Due Date
             reason = item.get('reason', 'N/A')
 
             item_text = f"\n\nOrder ID: {order_id}"
             item_text += f"\nCircuit: {circuit}"
+            item_text += f"\nDue Date: {due_date}"      # ⬅️ เพิ่มบรรทัดแสดงวัน Due Date ตรงนี้
             item_text += f"\nลูกค้า: {customer}"
             item_text += f"\nสถานที่: {address}"
             item_text += f"\nโทร: {phone}"

@@ -41,6 +41,7 @@ def process_disconnect_data(file_path):
             'building': row.get('SI_BUILDING', '-'),
             'khet': row.get('OIV_KHET', '-'),
             'khwang': row.get('OIV_KHWANG', '-'),
+            'due_date': row.get('OIV_SO_DUEDATE', '-'),  # ⬅️ เพิ่มบรรทัดนี้เพื่อดึงวัน Due Date
             'reason': reason
         })
         
